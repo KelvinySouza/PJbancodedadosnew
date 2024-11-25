@@ -1,125 +1,109 @@
 import sqlite3
 
-class BancoDeDados:
-    def __init__(self, banco):
-        self.banco = banco
-        self.conexao = sqlite3.connect(banco)
-        self.cursor = self.conexao.cursor()
-        self.criar_tabela()
 
-    def criar_tabela(self):
-        self.cursor.execute('''
-            CREATE TABLE IF NOT EXISTS Produtos (
-                id INTEGER PRIMARY KEY,
-                nome TEXT NOT NULL,
-                quantidade INTEGER NOT NULL,
-                preco REAL NOT NULL
-            );
-        ''')
-        self.conexao.commit()
+conn = sqlite3.connect('estoque.db')
+cursor = conn.cursor()
 
-    def adicionar_produto(self, nome, quantidade, preco):
-        self.cursor.execute('''
-            INSERT INTO Produtos (nome, quantidade, preco)
-            VALUES (?, ?, ?);
-        ''', (nome, quantidade, preco))
-        self.conexao.commit()
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS Produtos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        quantidade INTEGER NOT NULL CHECK (quantidade >= 0),
+        preco REAL NOT NULL CHECK (preco >= 0)
+    )
+''')
 
-    def listar_produtos(self):
-        self.cursor.execute('''
-            SELECT * FROM Produtos;
-        ''')
-        return self.cursor.fetchall()
+def adicionar_produto():
+    nome = input("Nome do produto: ")
+    quantidade = int(input("Quantidade: "))
+    preco = float(input("Preço: "))
+    cursor.execute('INSERT INTO Produtos (nome, quantidade, preco) VALUES (?, ?, ?)', (nome, quantidade, preco))
+    conn.commit()
+    print("Produto adicionado com sucesso!")
 
-    def atualizar_produto(self, id_produto, quantidade=None, preco=None):
-        if quantidade is not None:
-            self.cursor.execute('''
-                UPDATE Produtos SET quantidade = ?
-                WHERE id = ?;
-            ''', (quantidade, id_produto))
-        if preco is not None:
-            self.cursor.execute('''
-                UPDATE Produtos SET preco = ?
-                WHERE id = ?;
-            ''', (preco, id_produto))
-        self.conexao.commit()
+def listar_produtos():
+    cursor.execute('SELECT * FROM Produtos')
+    produtos = cursor.fetchall()
+    print("Produtos em estoque:")
+    for produto in produtos:
+        print(f"ID: {produto[0]}, Nome: {produto[1]}, Quantidade: {produto[2]}, Preço: {produto[3]:.2f}")
 
-    def remover_produto(self, id_produto):
-        self.cursor.execute('''
-            DELETE FROM Produtos
-            WHERE id = ?;
-        ''', (id_produto,))
-        self.conexao.commit()
+def atualizar_produto():
+    id_produto = int(input("ID do produto a ser atualizado: "))
+    quantidade = int(input("Nova quantidade (deixe em branco para não alterar): ") or "0")
+    preco = float(input("Novo preço (deixe em branco para não alterar): ") or "0")
+    if quantidade > 0:
+        cursor.execute('UPDATE Produtos SET quantidade = ? WHERE id = ?', (quantidade, id_produto))
+    if preco > 0:
+        cursor.execute('UPDATE Produtos SET preco = ? WHERE id = ?', (preco, id_produto))
+    conn.commit()
+    print("Produto atualizado com sucesso!")
 
-    def buscar_produto(self, id_produto=None, nome_produto=None):
-        if id_produto is not None:
-            self.cursor.execute('''
-                SELECT * FROM Produtos
-                WHERE id = ?;
-            ''', (id_produto,))
-        elif nome_produto is not None:
-            self.cursor.execute('''
-                SELECT * FROM Produtos
-                WHERE nome LIKE ?;
-            ''', (f'%{nome_produto}%',))
-        return self.cursor.fetchall()
+def remover_produto():
+    id_produto = int(input("ID do produto a ser removido: "))
+    cursor.execute('DELETE FROM Produtos WHERE id = ?', (id_produto,))
+    conn.commit()
+    print("Produto removido com sucesso!")
 
-    def calcular_valor_total(self):
-        self.cursor.execute('''
-            SELECT SUM(quantidade * preco) FROM Produtos;
-        ''')
-        return self.cursor.fetchone()[0]
-    
-import sqlite3
+def buscar_produto():
+    busca = input("Buscar produto por ID ou nome: ")
+    if busca.isdigit():
+        cursor.execute('SELECT * FROM Produtos WHERE id = ?', (int(busca),))
+    else:
+        cursor.execute('SELECT * FROM Produtos WHERE nome LIKE ?', ('%' + busca + '%',))
+    produtos = cursor.fetchall()
+    print("Produtos encontrados:")
+    for produto in produtos:
+        print(f"ID: {produto[0]}, Nome: {produto[1]}, Quantidade: {produto[2]}, Preço: {produto[3]:.2f}")
 
-def main():
-    banco_de_dados = BancoDeDados('estoque.db')
+def calcular_valor_total():
+    cursor.execute('SELECT SUM(quantidade * preco) FROM Produtos')
+    total = cursor.fetchone()[0]
+    print(f"Valor total do estoque: {total:.2f}")
 
-    while True:
-        print("\n**Sistema de Controle de Estoque**")
-        print("1. Adicionar Produto")
-        print("2. Listar Produtos")
-        print("3. Atualizar Produto")
-        print("4. Remover Produto")
-        print("5. Buscar Produto")
-        print("6. Calcular Valor Total")
-        print("7. Sair")
+def vender_produto():
+    id_produto = int(input("ID do produto a ser vendido: "))
+    quantidade_vendida = int(input("Quantidade vendida: "))
+    cursor.execute('SELECT quantidade, preco FROM Produtos WHERE id = ?', (id_produto,))
+    produto = cursor.fetchone()
+    if produto and produto[0] >= quantidade_vendida:
+        valor_venda = quantidade_vendida * produto[1]
+        cursor.execute('UPDATE Produtos SET quantidade = ? WHERE id = ?', (produto[0] - quantidade_vendida, id_produto))
+        conn.commit()
+        print(f"Venda realizada com sucesso! Valor da venda: {valor_venda:.2f}")
+    else:
+        print("Erro: quantidade insuficiente em estoque.")
 
-        opcao = int(input("Digite a opção: "))
+while True:
+    print("\nSistema de Controle de Estoque")
+    print("1. Adicionar Produto")
+    print("2. Listar Produtos")
+    print("3. Atualizar Produto")
+    print("4. Remover Produto")
+    print("5. Buscar Produto")
+    print("6. Calcular Valor Total do Estoque")
+    print("7. Vender Produto")
+    print("0. Sair")
+    opcao = input("Escolha uma opção: ")
 
-        if opcao == 1:
-            nome = input("Digite o nome do produto: ")
-            quantidade = int(input("Digite a quantidade do produto: "))
-            preco = float(input("Digite o preço do produto: "))
-            banco_de_dados.adicionar_produto(nome, quantidade, preco)
-        elif opcao == 2:
-            produtos = banco_de_dados.listar_produtos()
-            for produto in produtos:
-                print(f"ID: {produto[0]}, Nome: {produto[1]}, Quantidade: {produto[2]}, Preço: {produto[3]}")
-        elif opcao == 3:
-            id_produto = int(input("Digite o ID do produto: "))
-            quantidade = int(input("Digite a nova quantidade do produto: "))
-            preco = float(input("Digite o novo preço do produto: "))
-            banco_de_dados.atualizar_produto(id_produto, quantidade, preco)
-        elif opcao == 4:
-            id_produto = int(input("Digite o ID do produto: "))
-            banco_de_dados.remover_produto(id_produto)
-        elif opcao == 5:
-            id_produto = int(input("Digite o ID do produto: "))
-            produto = banco_de_dados.buscar_produto(id_produto)
-            if produto:
-                print(f"ID: {produto[0][0]}, Nome: {produto[0][1]}, Quantidade: {produto[0][2]}, Preço: {produto[0][3]}")
-            else:
-                print("Produto não encontrado")
-        elif opcao == 6:
-            valor_total = banco_de_dados.calcular_valor_total()
-            print(f"Valor Total: {valor_total:.2f}")
-        elif opcao == 7:
-            break
-        else:
-            print("Opção inválida") 
+    if opcao == '1':
+        adicionar_produto()
+    elif opcao == '2':
+        listar_produtos()
+    elif opcao == '3':
+        atualizar_produto()
+    elif opcao == '4':
+        remover_produto()
+    elif opcao == '5':
+        buscar_produto()
+    elif opcao == '6':
+        calcular_valor_total()
+    elif opcao == '7':
+        vender_produto()
+    elif opcao == '0':
+        break
+    else:
+        print("Opção inválida. Tente novamente.")  
 
-    banco_de_dados.conexao.close()
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
